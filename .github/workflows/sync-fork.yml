@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2020 Rodrigo Tavares <rodrigost23@users.noreply.github.com>
+#
+# SPDX-License-Identifier: GPL-2.0-only
+
+name: Sync Fork
+
+on:
+  push:
+  schedule:
+    - cron: "0 */6 * * *"
+
+jobs:
+  fetch-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Merge Upstream
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@users.noreply.github.com"
+          git pull --unshallow
+
+          git remote add upstream "https://github.com/unpaper/unpaper"
+          git fetch upstream
+          git merge upstream/main -v
+          git push origin main --force-with-lease
+          
+          
+          

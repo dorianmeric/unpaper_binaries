@@ -1,0 +1,122 @@
+# SPDX-FileCopyrightText: 2020 Rodrigo Tavares <rodrigost23@users.noreply.github.com>
+#
+# SPDX-License-Identifier: GPL-2.0-only
+
+name: Windows Build
+on:
+  push:
+    branches: [main]
+    tags: ["*"]
+
+jobs:
+  build:
+    runs-on: windows-2019
+
+    defaults:
+      run:
+        shell: bash --login -eo pipefail "{0}"
+
+    strategy:
+      matrix:
+        mingw: ["MINGW32", "MINGW64"]
+        include:
+          - mingw: "MINGW32"
+            arch: "i686"
+            file:
+          - mingw: "MINGW64"
+            arch: "x86_64"
+
+    env:
+      MSYSTEM: ${{ matrix.mingw }}
+      CHERE_INVOKING: 1
+
+    name: Build (${{ matrix.arch }})
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up shell
+        shell: pwsh
+        run: |
+          echo "C:\msys64\usr\bin\"  | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
+          echo "LIBAV_PATH=$($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("${{ github.workspace }}/../libav-11.8"))"  | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          echo "REF_NAME=$("${{ github.event.ref }}".replace('refs/heads/', '').replace('refs/tags/', ''))"  | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          echo "SHORT_HASH=$('${{ github.sha }}'.SubString(0, 7))"  | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Cache pacman packages
+        uses: actions/cache@v2.0.0
+        with:
+          key: pacman-cache-${{ matrix.arch }}
+          path: C:\tools\msys64\var\cache\pacman\pkg
+
+      - name: Install dependencies
+        run: >
+          pacman -S --noconfirm --needed zip base-devel mingw-w64-${{ matrix.arch }}-toolchain diffutils
+          pkg-config mingw-w64-${{ matrix.arch }}-yasm mingw-w64-${{ matrix.arch }}-gcc mingw-w64-${{ matrix.arch }}-SDL
+
+      - name: Cache libav
+        id: cache-libav
+        uses: actions/cache@v2.0.0
+        with:
+          path: ${{ env.LIBAV_PATH }}
+          key: libav-11.8-${{ matrix.arch }}
+
+      - name: Configure libav
+        if: steps.cache-libav.outputs.cache-hit != 'true'
+        working-directory: ${{ github.workspace }}/..
+        run: |
+          wget https://libav.org/releases/libav-11.8.tar.xz
+          tar -xvf libav-11.8.tar.xz || true
+          mv libav-11.8 ${LIBAV_PATH}
+          cd ${LIBAV_PATH}
+          ./configure --target-os=mingw32 --prefix=${MINGW_PREFIX}
+
+      - name: Build libav
+        if: steps.cache-libav.outputs.cache-hit != 'true'
+        working-directory: ${{ env.LIBAV_PATH }}
+        run: |
+          make -r
+
+      - name: Install libav
+        working-directory: ${{ env.LIBAV_PATH }}
+        run: |
+          make install
+
+      - name: Build Unpaper
+        run: |
+          autoreconf -fi
+          mkdir exe
+          ./configure --prefix=${PWD}/exe
+          make -r
+          make install
+          cp ${MINGW_PREFIX}/bin/LIBBZ2-1.DLL exe/bin
+          cp ${MINGW_PREFIX}/bin/LIBWINPTHREAD-1.DLL exe/bin
+          cp ${MINGW_PREFIX}/bin/ZLIB1.DLL exe/bin
+
+      # COMMIT:
+      - name: Upload a Build Artifact
+        if: startsWith(github.ref, 'refs/heads/')
+        continue-on-error: true
+        uses: actions/upload-artifact@v2
+        with:
+          name: unpaper-${{ env.REF_NAME }}-${{ env.SHORT_HASH }}-windows-${{ matrix.arch }}
+          path: exe/bin/*
+
+      # TAG:
+      - name: Zip files and create checksum
+        if: startsWith(github.ref, 'refs/tags/')
+        continue-on-error: true
+        run: |
+          FILENAME=${{ env.REF_NAME }}-windows-${{ matrix.arch }}
+          echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
+          ( cd exe/bin && zip -r ../../${FILENAME}.zip . )
+          sha256sum ${FILENAME}.zip > ${FILENAME}.sha256
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            ${{ env.FILENAME }}.zip
+            ${{ env.FILENAME }}.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
