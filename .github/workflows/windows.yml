@@ -61,9 +61,11 @@ jobs:
         if: steps.cache-libav.outputs.cache-hit != 'true'
         working-directory: ${{ github.workspace }}/..
         run: |
-          wget https://libav.org/releases/libav-11.8.tar.xz
-          tar -xvf libav-11.8.tar.xz || true
-          mv libav-11.8 ${LIBAV_PATH}
+          wget -O libav-11.8.tar.gz https://codeload.github.com/libav/libav/tar.gz/refs/tags/v11.8
+          LIBAV_SRC_DIR="$(tar -tzf libav-11.8.tar.gz | head -1 | cut -d/ -f1)"
+          tar -xvf libav-11.8.tar.gz
+          rm -rf "${LIBAV_PATH}"
+          mv "${LIBAV_SRC_DIR}" "${LIBAV_PATH}"
           cd ${LIBAV_PATH}
           ./configure --target-os=mingw32 --prefix=${MINGW_PREFIX}
 
