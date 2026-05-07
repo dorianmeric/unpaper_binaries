@@ -24,8 +24,8 @@ jobs:
           - "--buildtype=debugoptimized -Dwerror=true -Db_lto=true"
 
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-python@v3
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
       with:
         python-version: '3.x'
     - name: Dependencies
@@ -44,7 +44,7 @@ jobs:
       run: |
         export DESTDIR=$(mktemp -d)
         meson install -C builddir/
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       if: failure()
       with:
         name: Linux_Meson_Testlog
