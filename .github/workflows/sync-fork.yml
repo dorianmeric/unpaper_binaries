@@ -5,9 +5,8 @@
 name: Sync Fork
 
 on:
-  push:
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: '0 0 * * 0' # Runs weekly on Sunday at midnight UTC
 
 jobs:
   fetch-upstream:
@@ -24,6 +23,5 @@ jobs:
           git fetch upstream
           git merge upstream/main -v
           git push origin main --force-with-lease
-          
-          
-          
+
+

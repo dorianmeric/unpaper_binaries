@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-2019
+    runs-on: windows-latest
 
     defaults:
       run:
@@ -22,31 +22,28 @@ jobs:
         include:
           - mingw: "MINGW32"
             arch: "i686"
-            file:
           - mingw: "MINGW64"
             arch: "x86_64"
 
     env:
       MSYSTEM: ${{ matrix.mingw }}
       CHERE_INVOKING: 1
+      LIBAV_PATH: ${{ github.workspace }}/../libav-11.8
 
     name: Build (${{ matrix.arch }})
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set up shell
         shell: pwsh
         run: |
           echo "C:\msys64\usr\bin\"  | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
-          echo "LIBAV_PATH=$($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("${{ github.workspace }}/../libav-11.8"))"  | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-          echo "REF_NAME=$("${{ github.event.ref }}".replace('refs/heads/', '').replace('refs/tags/', ''))"  | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-          echo "SHORT_HASH=$('${{ github.sha }}'.SubString(0, 7))"  | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Cache pacman packages
-        uses: actions/cache@v2.0.0
+        uses: actions/cache@v4
         with:
           key: pacman-cache-${{ matrix.arch }}
-          path: C:\tools\msys64\var\cache\pacman\pkg
+          path: C:\msys64\var\cache\pacman\pkg
 
       - name: Install dependencies
         run: >
@@ -55,7 +52,7 @@ jobs:
 
       - name: Cache libav
         id: cache-libav
-        uses: actions/cache@v2.0.0
+        uses: actions/cache@v4
         with:
           path: ${{ env.LIBAV_PATH }}
           key: libav-11.8-${{ matrix.arch }}
@@ -96,9 +93,9 @@ jobs:
       - name: Upload a Build Artifact
         if: startsWith(github.ref, 'refs/heads/')
         continue-on-error: true
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
-          name: unpaper-${{ env.REF_NAME }}-${{ env.SHORT_HASH }}-windows-${{ matrix.arch }}
+          name: unpaper-${{ github.ref_name }}-${{ github.sha }}-windows-${{ matrix.arch }}
           path: exe/bin/*
 
       # TAG:
@@ -106,17 +103,16 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         continue-on-error: true
         run: |
-          FILENAME=${{ env.REF_NAME }}-windows-${{ matrix.arch }}
-          echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
+          FILENAME=${{ github.ref_name }}-windows-${{ matrix.arch }}
           ( cd exe/bin && zip -r ../../${FILENAME}.zip . )
           sha256sum ${FILENAME}.zip > ${FILENAME}.sha256
 
       - name: Create release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            ${{ env.FILENAME }}.zip
-            ${{ env.FILENAME }}.sha256
+            ${{ github.ref_name }}-windows-${{ matrix.arch }}.zip
+            ${{ github.ref_name }}-windows-${{ matrix.arch }}.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
