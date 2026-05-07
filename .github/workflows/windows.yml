@@ -62,8 +62,14 @@ jobs:
         working-directory: ${{ github.workspace }}/..
         run: |
           wget -O libav-11.8.tar.gz https://codeload.github.com/libav/libav/tar.gz/refs/tags/v11.8
-          LIBAV_SRC_DIR="$(tar -tzf libav-11.8.tar.gz | head -1 | cut -d/ -f1)"
           tar -xvf libav-11.8.tar.gz
+          shopt -s nullglob
+          libav_dirs=(libav-*/)
+          if [ "${#libav_dirs[@]}" -eq 0 ]; then
+            echo "Could not find extracted libav source directory"
+            exit 1
+          fi
+          LIBAV_SRC_DIR="${libav_dirs[0]%/}"
           rm -rf "${LIBAV_PATH}"
           mv "${LIBAV_SRC_DIR}" "${LIBAV_PATH}"
           cd ${LIBAV_PATH}
